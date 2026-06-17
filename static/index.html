@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>sd-webui-prompt-all-in-one</title>
+    <link rel="stylesheet" href="./css/main.min.css">
+    <link rel="stylesheet" href="./css/tag-search.css?v=3">
+    <style>
+        /* 标签组面板：Grid 自适应填满宽度 */
+        .group-tags{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))!important;gap:6px!important}
+        .group-tags .tag-item{margin:0!important}
+        /* 角色标签云：Grid 自适应填满宽度 */
+        .cs-tags-cloud{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))!important;gap:7px!important}
+        .cs-tag{margin:0!important}
+    </style>
+</head>
+<body class="">
+<div id="tab-headers">
+    <div class="tab-header-item" data-tab="tab_txt2img">txt2img</div>
+    <div class="tab-header-item" data-tab="tab_img2img">img2img</div>
+    <div class="tab-header-item" data-tab="tab_search">🔍 智能搜索</div>
+    <div class="tab-header-item" data-tab="tab_combo">📦 标签组合</div>
+</div>
+<div id="tabs">
+    <div id="tab_txt2img" class="tabitem gradio-tabitem svelte-19hvt5v">
+        <div class="svelte-vt1mxs gap">
+            <div id="txt2img_toprow" class="gradio-row svelte-15lo0d8 compact">
+                <div id="txt2img_prompt_container" class="gradio-column svelte-vt1mxs gap">
+                    <div id="component-5173" class="gradio-row svelte-15lo0d8">
+                        <div id="component-5174" class="gradio-column svelte-vt1mxs gap">
+                            <div id="component-5175" class="gradio-row svelte-15lo0d8">
+                                <div class="form svelte-awbtu4">
+                                    <div id="txt2img_token_counter" class="block gradio-html token-counter svelte-mppz8v padded" title="">
+                                        <div class="wrap center svelte-gjihhp hide"></div>
+                                        <div class="svelte-1ed2p3z">
+                                            <div class="prose gradio-html token-counter svelte-1ybaih5" id="txt2img_token_counter">
+                                                <span class="gr-box gr-text-input">0/0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="txt2img_prompt" class="block gradio-textbox svelte-mppz8v padded">
+                                        <label class="svelte-4xt1ch">
+                                            <span class="svelte-1gfkn6j sr-only hide"></span>
+                                            <textarea data-testid="textbox" class="scroll-hide svelte-4xt1ch autocomplete" placeholder="" rows="3"></textarea>
+                                        </label>
+                                        <my-component></my-component>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="component-5178" class="gradio-row svelte-15lo0d8">
+                        <div id="component-5179" class="gradio-column svelte-vt1mxs gap">
+                            <div id="component-5180" class="gradio-row svelte-15lo0d8">
+                                <div class="form svelte-awbtu4">
+                                    <div id="txt2img_negative_token_counter" class="block gradio-html token-counter svelte-mppz8v padded" title="">
+                                        <div class="wrap center svelte-gjihhp hide"></div>
+                                        <div class="svelte-1ed2p3z">
+                                            <div class="prose gradio-html token-counter svelte-1ybaih5" id="txt2img_negative_token_counter">
+                                                <span class="gr-box gr-text-input">0/0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="txt2img_neg_prompt" class="block gradio-textbox svelte-mppz8v padded">
+                                        <label class="svelte-4xt1ch">
+                                            <span class="svelte-1gfkn6j sr-only hide"></span>
+                                            <textarea data-testid="textbox" class="scroll-hide svelte-4xt1ch autocomplete" placeholder="" rows="3"></textarea>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="txt2img_steps" class="block gradio-slider svelte-mppz8v padded">
+            <div class="wrap default svelte-gjihhp hide"></div>
+            <div class="wrap svelte-jigama">
+                <div class="head svelte-jigama">
+                    <label for="range_id_1">
+                        <span class="svelte-1gfkn6j">Steps</span>
+                    </label>
+                    <input type="number" min="1" max="150" step="1" class="svelte-jigama" value="20">
+                </div>
+            </div>
+            <input type="range" id="range_id_1" name="cowbell" min="1" max="150" step="1" class="svelte-jigama">
+        </div>
+    </div>
+    <div id="tab_img2img" class="tabitem gradio-tabitem svelte-19hvt5v">
+        <div class="svelte-vt1mxs gap">
+            <div id="img2img_toprow" class="gradio-row svelte-15lo0d8 compact">
+                <div id="img2img_prompt_container" class="gradio-column svelte-vt1mxs gap">
+                    <div id="component-5703" class="gradio-row svelte-15lo0d8">
+                        <div id="component-5704" class="gradio-column svelte-vt1mxs gap">
+                            <div id="component-5705" class="gradio-row svelte-15lo0d8">
+                                <div class="form svelte-awbtu4">
+                                    <div id="img2img_token_counter" class="block gradio-html token-counter svelte-mppz8v padded" title="">
+                                        <div class="wrap center svelte-gjihgp hide"></div>
+                                        <div class="svelte-1ed2p3z">
+                                            <div class="prose gradio-html token-counter svelte-1ybaih5" id="img2img_token_counter">
+                                                <span class="gr-box gr-text-input">0/0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="img2img_prompt" class="block gradio-textbox svelte-mppz8v padded">
+                                        <label class="svelte-4xt1ch">
+                                            <span class="svelte-1gfkn6j sr-only hide"></span>
+                                            <textarea data-testid="textbox" class="scroll-hide svelte-4xt1ch autocomplete" placeholder="" rows="3"></textarea>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="component-5708" class="gradio-row svelte-15lo0d8">
+                        <div id="component-5709" class="gradio-column svelte-vt1mxs gap">
+                            <div id="component-5710" class="gradio-row svelte-15lo0d8">
+                                <div class="form svelte-awbtu4">
+                                    <div id="img2img_negative_token_counter" class="block gradio-html token-counter svelte-mppz8v padded" title="">
+                                        <div class="wrap center svelte-gjihgp hide"></div>
+                                        <div class="svelte-1ed2p3z">
+                                            <div class="prose gradio-html token-counter svelte-1ybaih5" id="img2img_negative_token_counter">
+                                                <span class="gr-box gr-text-input">0/0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="img2img_neg_prompt" class="block gradio-textbox svelte-mppz8v padded">
+                                        <label class="svelte-4xt1ch">
+                                            <span class="svelte-1gfkn6j sr-only hide"></span>
+                                            <textarea data-testid="textbox" class="scroll-hide svelte-4xt1ch autocomplete" placeholder="" rows="3"></textarea>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="img2img_steps" class="block gradio-slider svelte-mppz8v padded">
+            <div class="wrap default svelte-gjihgp hide"></div>
+            <div class="wrap svelte-jigama">
+                <div class="head svelte-jigama">
+                    <label for="range_id_20">
+                        <span class="svelte-1gfkn6j">Steps</span>
+                    </label>
+                    <input type="number" min="1" max="150" step="1" class="svelte-jigama" value="20">
+                </div>
+            </div>
+            <input type="range" id="range_id_20" name="cowbell" min="1" max="150" step="1" class="svelte-jigama">
+        </div>
+    </div>
+
+    <!-- ===== Unified Search Tab ===== -->
+    <div id="tab_search" class="tabitem" style="display:none;">
+        <div class="ts-container">
+            <!-- Search Mode Tabs -->
+            <div class="search-mode-tabs">
+                <button class="search-mode-btn active" data-mode="tag">🏷️ 标签</button>
+                <button class="search-mode-btn" data-mode="character">👤 角色搜索</button>
+            </div>
+
+            <!-- Settings Row -->
+            <div class="search-settings" id="search-settings">
+                <label class="ts-toggle-label">
+                    <input type="checkbox" id="underscore-toggle">
+                    <span class="ts-toggle-slider"></span>
+                    <span class="ts-toggle-text">_ → 空格</span>
+                </label>
+                <label class="ts-toggle-label">
+                    <input type="checkbox" id="comma-space-toggle">
+                    <span class="ts-toggle-slider"></span>
+                    <span class="ts-toggle-text">逗号空格</span>
+                </label>
+                <span class="ts-header-btns">
+                    <button class="ts-header-btn" onclick="exportPrompt()" title="导出当前提示词为txt文件">📥 导出</button>
+                    <button class="ts-header-btn" onclick="saveTemplate();return false;" title="保存当前提示词为模板">💾 模板</button>
+                    <button class="ts-header-btn" onclick="var el=document.getElementById('ts-template-bar');el.style.display=el.style.display==='none'?'block':'none';renderTemplateList();return false;" title="管理模板">📂 模板库</button>
+                </span>
+            </div>
+
+            <!-- Template List -->
+            <div class="ts-template-bar" id="ts-template-bar" style="display:none;">
+                <div class="ts-tpl-header"><span>📋 提示词模板</span><span class="ts-tpl-close" onclick="document.getElementById('ts-template-bar').style.display='none'">✕</span></div>
+                <div id="ts-template-list" class="ts-tpl-list"></div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="ts-search-bar">
+                <div class="ts-search-input-wrap">
+                    <span class="ts-search-icon" id="search-icon">🏷️</span>
+                    <input type="text" id="search-input" placeholder="输入英文搜标签 / 输中文搜翻译..." autocomplete="off" spellcheck="false">
+                    <span class="ts-search-hint" id="search-hint"></span>
+                    <button class="ts-clear-btn" id="search-clear-btn" title="清空">✕</button>
+                </div>
+                <!-- Character mode: additional search inputs -->
+                <div class="ts-search-input-wrap" id="search-input-wrap-series" style="display:none;">
+                    <span class="ts-search-icon">📺</span>
+                    <input type="text" id="search-input-series" placeholder="作品名 / 系列tag（可选）..." autocomplete="off" spellcheck="false">
+                </div>
+                <div class="ts-search-input-wrap" id="search-input-wrap-feature" style="display:none;">
+                    <span class="ts-search-icon">✨</span>
+                    <input type="text" id="search-input-feature" placeholder="特征标签，逗号分隔（可选）..." autocomplete="off" spellcheck="false">
+                </div>
+                <div class="search-options" id="search-options">
+                    <!-- Dynamic options based on mode -->
+                </div>
+            </div>
+
+            <!-- Results Area -->
+            <div class="search-results" id="search-results">
+                <div class="ts-empty-state" id="search-empty-state">
+                    <div class="ts-empty-icon" id="search-empty-icon">🏷️</div>
+                    <div class="ts-empty-text" id="search-empty-text">输入关键词开始搜索<br><small>14万 Danbooru 标签，支持中英双语搜索</small></div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="search-pagination" id="search-pagination" style="display:none;">
+                <button class="search-page-btn" id="search-prev-page">← 上一页</button>
+                <span class="search-page-info" id="search-page-info">第 1 页 / 共 1 页</span>
+                <button class="search-page-btn" id="search-next-page">下一页 →</button>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="ts-status" id="search-status"></div>
+
+            <!-- Toast -->
+            <div class="ts-toast" id="search-toast" style="display:none;"></div>
+
+            <!-- Back to Top -->
+            <button class="ts-back-to-top" id="search-back-to-top" title="回到顶端">⬆</button>
+        </div>
+    </div>
+
+    <!-- ===== Tag Combo Tab ===== -->
+    <div id="tab_combo" class="tabitem" style="display:none;">
+        <div class="tc-container">
+            <h2 class="tc-title">📦 标签组合管理</h2>
+            <p class="tc-desc">自由组合常用标签，保存后一键复制。支持复制全部或逐个选择。</p>
+
+            <!-- Create Combo -->
+            <div class="tc-create-panel">
+                <div class="tc-create-header">➕ 新建标签组合</div>
+                <div class="tc-create-body">
+                    <div class="tc-field">
+                        <label class="tc-label">组合名称</label>
+                        <input type="text" id="combo-name" class="tc-input" placeholder="给我取个名字，如：日常写实、NSFW场景..." maxlength="50">
+                    </div>
+                    <div class="tc-field">
+                        <label class="tc-label">标签列表 <small>（每行一个标签，或用逗号分隔）</small></label>
+                        <textarea id="combo-tags" class="tc-textarea" placeholder="1girl, solo, blue_sky, detailed
+blush, smile, looking_at_viewer
+...逐行添加标签" rows="5"></textarea>
+                    </div>
+                    <div class="tc-create-actions">
+                        <button id="combo-save-btn" class="tc-btn tc-btn-primary">💾 保存组合</button>
+                        <button id="combo-clear-btn" class="tc-btn tc-btn-secondary">🗑️ 清空</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import from prompt -->
+            <div class="tc-import-row">
+                <button id="combo-import-btn" class="tc-btn tc-btn-outline">📥 从正向提示词导入</button>
+                <span class="tc-import-hint">读取当前 txt2img 提示词中的标签</span>
+            </div>
+            <div class="tc-import-row" style="margin-top:8px;">
+                <button id="combo-seed-presets-btn" class="tc-btn tc-btn-outline">📦 导入推荐预设</button>
+                <span class="tc-import-hint">添加约 50 个常用标签组合</span>
+                <span style="margin-left:auto;"></span>
+                <button id="combo-reset-presets-btn" class="tc-btn tc-btn-danger tc-btn-sm">🔄 重置为预设</button>
+            </div>
+
+            <!-- Saved Combos -->
+            <div class="tc-saved-header">
+                <span class="tc-saved-title">📋 已保存的组合</span>
+                <span class="tc-saved-count" id="combo-count">0 个</span>
+            </div>
+            <div id="combo-list" class="tc-combo-list">
+                <div class="tc-empty">还没有保存的组合，上方新建一个吧 👆</div>
+            </div>
+
+            <!-- Toast -->
+            <div class="ts-toast" id="combo-toast" style="display:none;"></div>
+        </div>
+    </div>
+</div>
+<div id="txt2img_checkpoints_cards">
+    <div class="card"></div>
+</div>
+
+</body>
+<script>
+    const APP_MODE = true
+    let UiLoaded = []
+    let embeddings = []
+    let loras = []
+    let opts = {}
+
+    function selectCheckpoint(name) {
+        var time = Math.floor(Math.random() * 2000 + 3000)
+        setTimeout(function() {
+            opts.sd_model_checkpoint = name
+        }, time)
+    }
+
+    function onUiLoaded(callback) {
+        UiLoaded.push(callback)
+    }
+
+    window.onload = function() {
+        UiLoaded.forEach(function(callback) {
+            callback()
+        })
+    }
+</script>
+<script src="./js/jquery-3.7.1.min.js"></script>
+<script src="./js/main.js"></script>
+<script src="./js/unified-search.js"></script>
+<script src="./js/combo-manager.js"></script>
+<script src="./js/autocomplete.js"></script>
+<script src="/sd-webui-prompt-all-in-one-js"></script>
+</body>

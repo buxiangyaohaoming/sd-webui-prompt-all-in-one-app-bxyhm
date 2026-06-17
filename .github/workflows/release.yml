@@ -1,0 +1,80 @@
+name: Create release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create_release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Update submodule
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git submodule update --remote
+          git commit -am "Update submodules"
+          git push
+        continue-on-error: true
+
+      - name: Get date # 20231126
+        id: date
+        run: echo "::set-output name=date::$(date +%Y%m%d)"
+
+      - name: Get base commit SHA
+        id: base_commit_sha
+        run: echo "::set-output name=sha_short::$(git rev-parse --short=7 HEAD)"
+
+      - name: Get base commit SHA full
+        id: base_commit_sha_full
+        run: echo "::set-output name=sha_full::$(git rev-parse HEAD)"
+
+      - name: Get from commit SHA
+        id: from_commit_sha
+        run: echo "::set-output name=sha_short::$(git rev-parse --short=7 HEAD)"
+        working-directory: ./sd-webui-prompt-all-in-one
+
+      - name: Get from commit SHA full
+        id: from_commit_sha_full
+        run: echo "::set-output name=sha_full::$(git rev-parse HEAD)"
+        working-directory: ./sd-webui-prompt-all-in-one
+
+      - name: Install zip
+        run: sudo apt-get install zip
+
+      - name: Zip app
+        run: |
+          zip -r sd-webui-prompt-all-in-one-app.zip .
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+        with:
+          tag_name: ${{ steps.date.outputs.date }}.base.${{ steps.base_commit_sha.outputs.sha_short }}-from.${{ steps.from_commit_sha.outputs.sha_short }}
+          release_name: ${{ steps.date.outputs.date }} Base@${{ steps.base_commit_sha.outputs.sha_short }} / From@${{ steps.from_commit_sha.outputs.sha_short }}
+          body: "Build version:\nsd-webui-prompt-all-in-one-app: https://github.com/Physton/sd-webui-prompt-all-in-one-app/commit/${{ steps.base_commit_sha_full.outputs.sha_full }}\nsd-webui-prompt-all-in-one: https://github.com/Physton/sd-webui-prompt-all-in-one/commit/${{ steps.from_commit_sha_full.outputs.sha_full }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./sd-webui-prompt-all-in-one-app.zip
+          asset_name: sd-webui-prompt-all-in-one-app.zip
+          asset_content_type: application/zip

@@ -1,0 +1,11 @@
+__pycache__
+flagged
+/venv
+/build
+/dist
+.idea
+/dockertest
+.env
+debug.log
+*.bak
+pip/

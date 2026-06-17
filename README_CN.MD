@@ -2,6 +2,12 @@
 
 [![GitHub license](https://img.shields.io/github/license/buxiangyaohaoming/sd-webui-prompt-all-in-one-app-bxyhm?style=flat-square)](https://github.com/buxiangyaohaoming/sd-webui-prompt-all-in-one-app-bxyhm/blob/main/LICENSE)
 
+<div align="center">
+
+### [🇺🇸 English](README.MD) | [🇨🇳 简体中文](README_CN.MD)
+
+</div>
+
 > **⚠️ 本项目代码（包括新增功能、翻译数据修复、文档）均由 AI（Claude）生成。**
 >
 > 基于 [Physton/sd-webui-prompt-all-in-one-app](https://github.com/Physton/sd-webui-prompt-all-in-one-app) 进行 Fork 并增强。
@@ -36,7 +42,7 @@
 ### 🧩 Tag 组合管理
 
 - **组合预设**：保存常用的 Prompt 标签组合，快速复用
-- **组合管理**：创建、编辑、删除自定义标签组合
+- **组合管理**：创建、编辑、删除自定义标签组合(目前没有完善)
 
 ### 📝 中文化翻译大幅增强
 

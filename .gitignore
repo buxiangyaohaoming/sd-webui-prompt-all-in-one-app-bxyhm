@@ -8,4 +8,8 @@ flagged
 .env
 debug.log
 *.bak
+*.backup_*
 pip/
+.verifier_cache/
+scripts/
+*.txt.*

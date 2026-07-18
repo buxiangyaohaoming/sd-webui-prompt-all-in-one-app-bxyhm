@@ -36,7 +36,8 @@
             placeholder: '输入角色名 / 角色tag / 中文译名...',
             emptyIcon: '👤',
             emptyText: '输入角色名、系列或特征开始搜索<br><small>可组合筛选：任意字段均可留空</small>',
-            options: '<label class="search-option-label"><input type="checkbox" id="opt-exact"> <span>精准匹配</span></label>'
+            options: '<label class="search-option-label"><input type="checkbox" id="opt-exact"> <span>精准匹配</span></label>' +
+                     '<label class="search-option-label"><input type="checkbox" id="opt-hide-no-tags"> <span>仅显示有属性标签的角色</span></label>'
         }
     };
 
@@ -165,12 +166,24 @@
         // Pagination
         if ($prevPage) {
             $prevPage.addEventListener('click', function() {
-                if (currentPage > 1) doSearch(currentQuery, currentPage - 1);
+                if (currentPage > 1) {
+                    if (currentMode === 'character') {
+                        triggerCharacterSearch(true, currentPage - 1);
+                    } else {
+                        doSearch(currentQuery, currentPage - 1);
+                    }
+                }
             });
         }
         if ($nextPage) {
             $nextPage.addEventListener('click', function() {
-                if (currentPage < totalPages) doSearch(currentQuery, currentPage + 1);
+                if (currentPage < totalPages) {
+                    if (currentMode === 'character') {
+                        triggerCharacterSearch(true, currentPage + 1);
+                    } else {
+                        doSearch(currentQuery, currentPage + 1);
+                    }
+                }
             });
         }
     }
@@ -217,8 +230,9 @@
         $hint.textContent = isChinese ? '中文搜索' : 'EN搜索';
     }
 
-    // ===== #10: Combined Character Search =====
-    function triggerCharacterSearch(immediate) {
+    // ===== #10: Combined Character Search (server-side intersection) =====
+    function triggerCharacterSearch(immediate, page) {
+        page = page || 1;
         var nameVal = ($input && $input.value || '').trim();
         var seriesVal = ($inputSeries && $inputSeries.value || '').trim();
         var featureVal = ($inputFeature && $inputFeature.value || '').trim();
@@ -232,82 +246,49 @@
         clearTimeout(charSearchTimer);
         var delay = immediate ? 0 : 300;
         charSearchTimer = setTimeout(function() {
-            doCharacterSearch(nameVal, seriesVal, featureVal);
+            doCharacterSearch(nameVal, seriesVal, featureVal, page);
         }, delay);
     }
 
-    async function doCharacterSearch(nameQuery, seriesQuery, featureQuery) {
+    async function doCharacterSearch(nameQuery, seriesQuery, featureQuery, page) {
         if (isSearching) return;
         isSearching = true;
+        page = page || 1;
         currentQuery = [nameQuery, seriesQuery, featureQuery].filter(Boolean).join(' | ');
 
         if ($results) $results.innerHTML = '<div class="ts-loading">搜索中...</div>';
         if ($pagination) $pagination.style.display = 'none';
 
         try {
-            var promises = [];
-            var queryTypes = [];
+            var submode = 'fuzzy';
+            var exactOpt = document.getElementById('opt-exact');
+            if (exactOpt && exactOpt.checked) submode = 'exact';
 
-            if (nameQuery) {
-                var submode = 'fuzzy';
-                var exactOpt = document.getElementById('opt-exact');
-                if (exactOpt && exactOpt.checked) submode = 'exact';
-                promises.push(fetch('/api/search?q=' + encodeURIComponent(nameQuery) + '&mode=character&submode=' + submode + '&page=1&per_page=200')
-                    .then(function(r) { return r.json(); }));
-                queryTypes.push('name');
-            }
-            if (seriesQuery) {
-                promises.push(fetch('/api/search?q=' + encodeURIComponent(seriesQuery) + '&mode=series&page=1&per_page=200')
-                    .then(function(r) { return r.json(); }));
-                queryTypes.push('series');
-            }
-            if (featureQuery) {
-                promises.push(fetch('/api/search?q=' + encodeURIComponent(featureQuery) + '&mode=feature&page=1&per_page=200')
-                    .then(function(r) { return r.json(); }));
-                queryTypes.push('feature');
-            }
+            // Single API call with server-side intersection — no truncation
+            var url = '/api/search?mode=combined&page=' + page + '&per_page=200';
+            if (nameQuery) url += '&q=' + encodeURIComponent(nameQuery) + '&submode=' + submode;
+            if (seriesQuery) url += '&series=' + encodeURIComponent(seriesQuery);
+            if (featureQuery) url += '&feature=' + encodeURIComponent(featureQuery);
+            var hideNoTags = document.getElementById('opt-hide-no-tags');
+            if (hideNoTags && hideNoTags.checked) url += '&exclude_no_tags=true';
 
-            var allResults = await Promise.all(promises);
+            var resp = await fetch(url);
+            if (!resp.ok) throw new Error('API error: ' + resp.status);
+            var data = await resp.json();
 
-            // Intersect: build a map of char tag → set of query types that matched
-            var charMap = {};
-            for (var i = 0; i < allResults.length; i++) {
-                var data = allResults[i];
-                if (data.error || !data.results) continue;
-                var qType = queryTypes[i];
-                for (var j = 0; j < data.results.length; j++) {
-                    var r = data.results[j];
-                    var tag = r.tag;
-                    if (!charMap[tag]) {
-                        charMap[tag] = { char: r, matched: {} };
-                    }
-                    charMap[tag].matched[qType] = true;
-                }
+            if (data.error) {
+                if ($results) $results.innerHTML = '<div class="ts-empty-state"><div class="ts-empty-icon">⚠️</div><div class="ts-empty-text">' + data.error + '</div></div>';
+                return;
             }
 
-            // Filter: character must match ALL non-empty queries
-            var requiredTypes = queryTypes.length;
-            var filtered = [];
-            for (var tag in charMap) {
-                if (Object.keys(charMap[tag].matched).length >= requiredTypes) {
-                    filtered.push(charMap[tag].char);
-                }
-            }
-
-            // Sort by name
-            filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-
-            totalPages = 1;
-            currentPage = 1;
-
-            if (filtered.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 if ($results) $results.innerHTML = '<div class="ts-empty-state"><div class="ts-empty-icon">🔍</div><div class="ts-empty-text">没有找到匹配的角色<br><small>尝试减少筛选条件</small></div></div>';
             } else {
-                renderResults(filtered, currentQuery);
+                renderResults(data.results, currentQuery);
             }
 
-            if ($pagination) $pagination.style.display = 'none';
-            if ($status) $status.textContent = '角色搜索 "' + currentQuery + '" — 找到 ' + filtered.length + ' 个结果';
+            updatePagination(data.page, data.total_pages, data.total);
+            if ($status) $status.textContent = '角色搜索 "' + currentQuery + '" — 找到 ' + (data.total || 0) + ' 个结果';
 
         } catch(e) {
             if ($results) $results.innerHTML = '<div class="ts-empty-state"><div class="ts-empty-icon">❌</div><div class="ts-empty-text">搜索失败: ' + e.message + '</div></div>';

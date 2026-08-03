@@ -18,6 +18,14 @@ This fork adds AI-assisted features and massive translation improvements on top 
 
 ---
 
+## Screenshot
+
+![Search Interface](assets/search-interface.png)
+
+*Unified search: character search with thumbnail images, attribute tags, and series filtering*
+
+---
+
 ## Features
 
 ### Original Features
@@ -30,12 +38,14 @@ This fork adds AI-assisted features and massive translation improvements on top 
 
 **Tag Search & Autocomplete**
 - Fuzzy search Danbooru tags in both Chinese and English
+- Relevance-sorted results: exact match > prefix match > substring match
 - Real-time autocomplete suggestions as you type
 
 **Character Name Search**
 - Search characters by name with autocomplete
 - Browse characters grouped by series (Idolmaster, Uma Musume, Touhou Project, etc.)
-- Filter to show only characters with attribute tags
+- Filter to show only characters with attribute tags (enabled by default)
+- **Character thumbnail images** — fetched from Animadex with lazy loading and auto-retry
 
 **Unified Search**
 - Simultaneously search across tags, characters, and combos
@@ -48,6 +58,12 @@ This fork adds AI-assisted features and massive translation improvements on top 
 **Alias System**
 - Tag alias resolution (e.g., "赛马娘" → "umamusume")
 - Customizable via `aliases.csv`
+
+**UI/UX Improvements**
+- Dual-container isolation: switching search modes preserves results and scroll position
+- Sticky tab headers auto-hide on scroll down, reappear on scroll up
+- Tab-specific scroll position memory (txt2img/img2img)
+- Range slider scroll isolation (wheel on sliders won't scroll the page)
 
 **Massive Chinese Translation Fixes**
 - **143,000+** Danbooru tag Chinese translations in `danbooru.zh_CN.csv`
@@ -141,6 +157,8 @@ sd-webui-prompt-all-in-one-app/
 ├── characters.txt               # Character tag definitions (245K+ lines)
 ├── aliases.csv                  # Tag alias mappings
 ├── fix_touhou_translations.py   # Translation fix utility
+├── assets/
+│   └── search-interface.png     # Screenshot
 ├── static/
 │   ├── js/
 │   │   ├── character-search.js  # Character search
@@ -160,6 +178,7 @@ sd-webui-prompt-all-in-one-app/
 
 - Original project: [Physton/sd-webui-prompt-all-in-one-app](https://github.com/Physton/sd-webui-prompt-all-in-one-app)
 - Tag data: [Danbooru](https://danbooru.donmai.us/)
+- Character images: [Animadex](https://animadex.net/)
 - Translation reference: [Moegirl Wiki](https://zh.moegirl.org.cn/), [52poke](https://wiki.52poke.com/)
 
 ---

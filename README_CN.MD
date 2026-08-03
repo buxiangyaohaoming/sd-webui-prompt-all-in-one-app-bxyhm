@@ -18,6 +18,14 @@
 
 ---
 
+## 界面截图
+
+![搜索界面](assets/search-interface.png)
+
+*统一搜索界面：角色搜索支持缩略图展示、属性标签筛选、系列过滤*
+
+---
+
 ## 功能特性
 
 ### 原版功能
@@ -30,12 +38,14 @@
 
 **标签搜索与自动补全**
 - 支持中英文模糊搜索 Danbooru 标签
+- 搜索结果按相关性排序：精确匹配 > 前缀匹配 > 子串匹配
 - 输入时实时显示自动补全建议
 
 **角色名搜索**
 - 在左侧标签列表中搜索角色名称，自动补全并显示关联标签
 - 按系列（偶像大师、赛马娘、东方 Project 等）分类浏览角色
-- 支持"仅显示有属性标签的角色"筛选
+- 支持"仅显示有属性标签的角色"筛选（默认开启）
+- **角色缩略图展示** — 从 Animadex 拉取外观图片，支持延迟加载和自动重试
 
 **统一搜索**
 - 同时搜索标签、角色、组合，一键添加
@@ -49,10 +59,15 @@
 - Tag 别名解析（如"赛马娘" → "umamusume"）
 - 通过 `aliases.csv` 自定义映射
 
+**UI/UX 优化**
+- 双容器隔离：切换搜索模式时保留对方内容和滚动位置
+- 顶部标签栏下滑自动隐藏、上滑立即出现
+- 主标签页（文生图/图生图）独立记忆滚动位置
+- Range 滑块滚轮隔离（滑块上滚轮操作不触发页面滚动）
+
 **中文化翻译大幅增强**
 - 修复了 **14.3 万+** 条 Danbooru 标签的中文翻译（`danbooru.zh_CN.csv`）
-- 重点修正了以下系列的
-角色译名：偶像大师、赛马娘、东方 Project、原神、崩坏：星穹铁道、绝区零、鸣潮、碧蓝档案、碧蓝航线等
+- 重点修正了以下系列的角色译名：偶像大师、赛马娘、东方 Project、原神、崩坏：星穹铁道、绝区零、鸣潮、碧蓝档案、碧蓝航线等
 - 翻译来源以萌娘百科、52poke 等权威中文 ACG 百科为准，置信度达 95%+
 - `characters.txt` 含 **24.5 万+** 条角色条目，附带中文名和系列信息
 
@@ -142,6 +157,8 @@ sd-webui-prompt-all-in-one-app/
 ├── characters.txt               # 角色标签定义（24.5万+行）
 ├── aliases.csv                  # Tag 别名映射表
 ├── fix_touhou_translations.py   # 翻译修复工具
+├── assets/
+│   └── search-interface.png     # 界面截图
 ├── static/
 │   ├── js/
 │   │   ├── character-search.js  # 角色搜索
@@ -161,6 +178,7 @@ sd-webui-prompt-all-in-one-app/
 
 - 原始项目：[Physton/sd-webui-prompt-all-in-one-app](https://github.com/Physton/sd-webui-prompt-all-in-one-app)
 - 标签数据来源：[Danbooru](https://danbooru.donmai.us/)
+- 角色图片来源：[Animadex](https://animadex.net/)
 - 翻译参考：[萌娘百科](https://zh.moegirl.org.cn/)、[52poke](https://wiki.52poke.com/)
 
 ---

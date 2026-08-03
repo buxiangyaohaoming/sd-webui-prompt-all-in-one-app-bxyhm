@@ -17,9 +17,9 @@
     var commaSpaceEnabled = false;
 
     // ===== DOM Elements =====
-    var $input, $hint, $clearBtn, $results, $status, $toast;
+    var $input, $hint, $clearBtn, $results, $resultsTag, $resultsChar, $status, $toast;
     var $pagination, $pageInfo, $prevPage, $nextPage;
-    var $modeBtns, $searchIcon, $emptyIcon, $emptyText, $searchOptions, $underscoreToggle, $commaSpaceToggle;
+    var $modeBtns, $searchIcon, $searchOptions, $underscoreToggle, $commaSpaceToggle;
     var $inputSeries, $inputFeature, $wrapSeries, $wrapFeature;
 
     // ===== Mode Config =====
@@ -37,7 +37,7 @@
             emptyIcon: '👤',
             emptyText: '输入角色名、系列或特征开始搜索<br><small>可组合筛选：任意字段均可留空</small>',
             options: '<label class="search-option-label"><input type="checkbox" id="opt-exact"> <span>精准匹配</span></label>' +
-                     '<label class="search-option-label"><input type="checkbox" id="opt-hide-no-tags"> <span>仅显示有属性标签的角色</span></label>'
+                     '<label class="search-option-label"><input type="checkbox" id="opt-hide-no-tags" checked> <span>仅显示有属性标签的角色</span></label>'
         }
     };
 
@@ -45,10 +45,12 @@
         if (initialized) return;
         initialized = true;
 
+        // 隔离 range 滑块滚轮行为：滚轮调整滑块值时阻止页面滚动
+        initRangeScrollIsolation();
+
         $input = document.getElementById('search-input');
         $hint = document.getElementById('search-hint');
         $clearBtn = document.getElementById('search-clear-btn');
-        $results = document.getElementById('search-results');
         $status = document.getElementById('search-status');
         $toast = document.getElementById('search-toast');
         $pagination = document.getElementById('search-pagination');
@@ -57,14 +59,16 @@
         $nextPage = document.getElementById('search-next-page');
         $modeBtns = document.querySelectorAll('.search-mode-btn');
         $searchIcon = document.getElementById('search-icon');
-        $emptyIcon = document.getElementById('search-empty-icon');
-        $emptyText = document.getElementById('search-empty-text');
         $searchOptions = document.getElementById('search-options');
         $underscoreToggle = document.getElementById('underscore-toggle');
         $inputSeries = document.getElementById('search-input-series');
         $inputFeature = document.getElementById('search-input-feature');
         $wrapSeries = document.getElementById('search-input-wrap-series');
         $wrapFeature = document.getElementById('search-input-wrap-feature');
+
+        // 双容器：切换子模式不销毁内容
+        $resultsTag = document.getElementById('search-results-tag');
+        $resultsChar = document.getElementById('search-results-character');
 
         // Load underscore setting
         try {
@@ -188,10 +192,22 @@
         }
     }
 
+    // 各子模式独立页面滚动位置
+    var _modeScrollY = { tag: 0, character: 0 };
+    var _switchingSubMode = false;
+
     function switchMode(mode) {
+        // 保存当前模式的页面滚动位置
+        _modeScrollY[currentMode] = window.scrollY;
+
         currentMode = mode;
         currentPage = 1;
         totalPages = 1;
+
+        // 切换结果容器：不销毁内容，仅显隐
+        if ($resultsTag) $resultsTag.style.display = mode === 'tag' ? '' : 'none';
+        if ($resultsChar) $resultsChar.style.display = mode === 'character' ? '' : 'none';
+        $results = mode === 'tag' ? $resultsTag : $resultsChar;
 
         // Update button states
         $modeBtns.forEach(function(btn) {
@@ -203,8 +219,13 @@
         var config = MODE_CONFIG[mode];
         $searchIcon.textContent = config.icon;
         $input.placeholder = config.placeholder;
-        $emptyIcon.textContent = config.emptyIcon;
-        $emptyText.innerHTML = config.emptyText;
+
+        // Update empty state in active container
+        var emptyIcon = $results ? $results.querySelector('.ts-empty-icon') : null;
+        var emptyText = $results ? $results.querySelector('.ts-empty-text') : null;
+        if (emptyIcon) emptyIcon.textContent = config.emptyIcon;
+        if (emptyText) emptyText.innerHTML = config.emptyText;
+
         $searchOptions.innerHTML = config.options;
 
         // Show/hide character-specific inputs
@@ -215,13 +236,21 @@
         // Set main input ID hint
         if ($input) $input.dataset.field = 'name';
 
-        // Clear results & inputs
-        showEmpty();
+        // 清空输入框，但保留搜索结果（内容不销毁）
         $input.value = '';
         if ($inputSeries) $inputSeries.value = '';
         if ($inputFeature) $inputFeature.value = '';
         $clearBtn.style.display = 'none';
         $input.focus();
+
+        // 恢复目标模式的页面滚动位置
+        _switchingSubMode = true;
+        window.scrollTo({ top: _modeScrollY[mode] || 0, behavior: 'instant' });
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                _switchingSubMode = false;
+            });
+        });
     }
 
     function updateHint(val) {
@@ -352,6 +381,87 @@
 
         if ($results) $results.innerHTML = html;
         bindResultEvents();
+
+        // 搜索结果已渲染，延迟加载角色图片（不阻塞搜索展示）
+        lazyLoadCharacterImages();
+    }
+
+    /**
+     * 延迟加载角色图片：先展示搜索结果，再错峰加载图片。
+     * 避免所有图片同时请求阻塞服务器，确保搜索响应不受影响。
+     *
+     * 重试机制：每张图片最多尝试 4 次（首次 + 3 次重试），
+     * 全部失败后停止，直到下次搜索（DOM 重建）或页面刷新。
+     */
+    var _imageLoadTimer = null;
+    function lazyLoadCharacterImages() {
+        // 清除上次未完成的加载计划
+        if (_imageLoadTimer) clearTimeout(_imageLoadTimer);
+
+        _imageLoadTimer = setTimeout(function() {
+            var images = document.querySelectorAll('img.cs-character-image[data-src]');
+            if (images.length === 0) return;
+
+            // 交错加载：每张图片间隔 80ms，避免瞬间大量并发请求
+            var staggerMs = 80;
+            // 同一时间最多 3 个并发（浏览器自身限制通常为 6，留余量给其他资源）
+            var batchSize = 3;
+
+            for (var i = 0; i < images.length; i++) {
+                (function(img, delay) {
+                    setTimeout(function() {
+                        var src = img.getAttribute('data-src');
+                        if (src) {
+                            // 绑定错误重试处理器（在设置 src 之前）
+                            _bindImageRetry(img, src);
+                            img.setAttribute('src', src);
+                            img.removeAttribute('data-src');
+                        }
+                    }, delay);
+                })(images[i], Math.floor(i / batchSize) * staggerMs);
+            }
+        }, 100); // 100ms 延迟确保 DOM 已渲染完成
+    }
+
+    /**
+     * 为单张图片绑定加载错误时的重试逻辑。
+     * - 最多尝试 retryMax 次（默认 4）
+     * - 每次重试间隔递增：1s, 2s, 4s
+     * - 全部失败后隐藏图片容器（添加 cs-image-error 类）
+     */
+    function _bindImageRetry(img, baseSrc) {
+        var _retrying = false; // 防止并发重试
+
+        img.addEventListener('error', function() {
+            if (_retrying) return; // 已在重试流程中，忽略重复 error 事件
+            _retrying = true;
+
+            var count = parseInt(img.getAttribute('data-retry-count')) || 0;
+            var maxRetries = parseInt(img.getAttribute('data-retry-max')) || 4;
+
+            count++;
+            img.setAttribute('data-retry-count', count);
+
+            if (count < maxRetries) {
+                // 还有重试机会：递增延迟后重试
+                var delay = Math.pow(2, count - 1) * 1000; // 1s, 2s, 4s
+                setTimeout(function() {
+                    // 添加 cache-busting 参数，确保重新请求
+                    var retrySrc = baseSrc + '&_retry=' + count;
+                    img.setAttribute('src', retrySrc);
+                    _retrying = false;
+                }, delay);
+            } else {
+                // 所有重试次数用尽：隐藏图片容器
+                img.parentElement.classList.add('cs-image-error');
+                _retrying = false;
+            }
+        });
+
+        // 加载成功时重置重试计数（用于未来可能的动态操作）
+        img.addEventListener('load', function() {
+            _retrying = false;
+        });
     }
 
     function renderTagResults(results, query) {
@@ -383,7 +493,7 @@
     function renderCharacterCard(char) {
         var nameDisplay = char.name;
         if (char.name_zh) nameDisplay += ' (' + char.name_zh + ')';
-        
+
         var seriesDisplay = char.series_name;
         if (char.series_zh) seriesDisplay += ' (' + char.series_zh + ')';
 
@@ -397,26 +507,38 @@
 
         var totalTags = char.tags.length + 2;
 
+        // 角色图片：延迟加载，先展示搜索结果再加载图片
+        var imgUrl = '/api/character-image?slug=' + encodeURIComponent(char.tag);
+
         return '<div class="cs-character-card">' +
-            '<div class="cs-character-header">' +
-                '<div class="cs-character-name">' + escapeHtml(nameDisplay) + '</div>' +
-                '<div class="cs-character-series">' + escapeHtml(seriesDisplay) + '</div>' +
+            '<div class="cs-character-image-wrap">' +
+                '<img class="cs-character-image" data-src="' + imgUrl + '"' +
+                ' alt="' + escapeHtml(char.name) + '"' +
+                ' loading="lazy"' +
+                ' data-retry-count="0"' +
+                ' data-retry-max="4" />' +
             '</div>' +
-            '<div class="cs-tags-section">' +
-                '<div class="cs-tags-label">角色 &amp; 作品（默认已选）</div>' +
-                '<div class="cs-tags-cloud">' +
-                    '<span class="cs-tag cs-meta-tag cs-selected" data-tag="' + escapeHtml(char.tag) + '" data-type="meta">👤 ' + escapeHtml(char.tag) + '</span>' +
-                    '<span class="cs-tag cs-meta-tag cs-selected" data-tag="' + escapeHtml(char.series) + '" data-type="meta">📺 ' + escapeHtml(char.series) + '</span>' +
+            '<div class="cs-character-body">' +
+                '<div class="cs-character-header">' +
+                    '<div class="cs-character-name">' + escapeHtml(nameDisplay) + '</div>' +
+                    '<div class="cs-character-series">' + escapeHtml(seriesDisplay) + '</div>' +
                 '</div>' +
-            '</div>' +
-            '<div class="cs-tags-section">' +
-                '<div class="cs-tags-label">属性标签（点击选择 / 取消）</div>' +
-                '<div class="cs-tags-cloud">' + tagsHtml + '</div>' +
-            '</div>' +
-            '<div class="cs-actions">' +
-                '<button class="cs-copy-selected-btn">📋 复制选中（<span class="cs-sel-num">2</span> 个标签）</button>' +
-                '<button class="cs-select-all-btn">✅ 全选属性</button>' +
-                '<span class="cs-selected-count">已选 <strong class="cs-sel-num">2</strong> / ' + totalTags + '</span>' +
+                '<div class="cs-tags-section">' +
+                    '<div class="cs-tags-label">角色 &amp; 作品（默认已选）</div>' +
+                    '<div class="cs-tags-cloud">' +
+                        '<span class="cs-tag cs-meta-tag cs-selected" data-tag="' + escapeHtml(char.tag) + '" data-type="meta">👤 ' + escapeHtml(char.tag) + '</span>' +
+                        '<span class="cs-tag cs-meta-tag cs-selected" data-tag="' + escapeHtml(char.series) + '" data-type="meta">📺 ' + escapeHtml(char.series) + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="cs-tags-section">' +
+                    '<div class="cs-tags-label">属性标签（点击选择 / 取消）</div>' +
+                    '<div class="cs-tags-cloud">' + tagsHtml + '</div>' +
+                '</div>' +
+                '<div class="cs-actions">' +
+                    '<button class="cs-copy-selected-btn">📋 复制选中（<span class="cs-sel-num">2</span> 个标签）</button>' +
+                    '<button class="cs-select-all-btn">✅ 全选属性</button>' +
+                    '<span class="cs-selected-count">已选 <strong class="cs-sel-num">2</strong> / ' + totalTags + '</span>' +
+                '</div>' +
             '</div>' +
         '</div>';
     }
@@ -701,25 +823,87 @@
     window.deleteTemplate = deleteTemplate;
     window.renderTemplateList = renderTemplateList;
 
-    // ===== Back to Top Button =====
+    // ===== Range Slider Scroll Isolation =====
+    // 在 range 滑块上使用滚轮时，手动调整滑块值并阻止页面滚动
+    function initRangeScrollIsolation() {
+        document.addEventListener('wheel', function(e) {
+            var target = e.target;
+            if (target.tagName !== 'INPUT' || target.type !== 'range') return;
+
+            // 阻止页面滚动
+            e.preventDefault();
+
+            // 手动步进滑块值
+            var step = parseFloat(target.step) || 1;
+            var min = parseFloat(target.min);
+            var max = parseFloat(target.max);
+            var delta = e.deltaY > 0 ? -step : step;
+            var newVal = parseFloat(target.value) + delta;
+
+            // 边界钳制
+            if (!isNaN(min)) newVal = Math.max(min, newVal);
+            if (!isNaN(max)) newVal = Math.min(max, newVal);
+
+            target.value = newVal;
+            // 触发 input + change 事件，确保 Gradio 感知值变化
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+        }, { passive: false });
+    }
+
+    // ===== Back to Top Button + Sticky Top Tabs =====
     var $backToTop;
+    var $tabHeaders;
+    var _lastScrollY = 0;
+    var _scrollTicking = false;
+
     function initBackToTop() {
         $backToTop = document.getElementById('search-back-to-top');
-        if (!$backToTop) return;
+        $tabHeaders = document.getElementById('tab-headers');
 
-        // Show/hide on scroll
+        // Unified scroll handler (rAF-throttled)
         window.addEventListener('scroll', function() {
-            if (window.scrollY > 400) {
-                $backToTop.classList.add('visible');
-            } else {
-                $backToTop.classList.remove('visible');
+            if (!_scrollTicking) {
+                requestAnimationFrame(function() {
+                    var scrollY = window.scrollY;
+
+                    // 记录当前子模式的页面滚动位置（切换期间跳过，避免覆盖恢复值）
+                    if (!_switchingSubMode) {
+                        _modeScrollY[currentMode] = scrollY;
+                    }
+
+                    // Back-to-top button
+                    if ($backToTop) {
+                        if (scrollY > 400) {
+                            $backToTop.classList.add('visible');
+                        } else {
+                            $backToTop.classList.remove('visible');
+                        }
+                    }
+
+                    // 顶部标签切换栏：下滑缓慢隐藏，上滑立即出现
+                    if ($tabHeaders) {
+                        var SCROLL_THRESHOLD = 50;
+                        if (scrollY > _lastScrollY && scrollY > SCROLL_THRESHOLD) {
+                            $tabHeaders.classList.add('tab-headers-hidden');
+                        } else if (scrollY < _lastScrollY) {
+                            $tabHeaders.classList.remove('tab-headers-hidden');
+                        }
+                    }
+
+                    _lastScrollY = scrollY;
+                    _scrollTicking = false;
+                });
+                _scrollTicking = true;
             }
-        });
+        }, { passive: true });
 
         // Click to scroll to top
-        $backToTop.addEventListener('click', function() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
+        if ($backToTop) {
+            $backToTop.addEventListener('click', function() {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
     }
 
     function updateInitWithNewFeatures() {

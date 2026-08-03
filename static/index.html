@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>sd-webui-prompt-all-in-one</title>
     <link rel="stylesheet" href="./css/main.min.css">
-    <link rel="stylesheet" href="./css/tag-search.css?v=3">
+    <link rel="stylesheet" href="./css/tag-search.css?v=4">
     <style>
         /* 标签组面板：Grid 自适应填满宽度 */
         .group-tags{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))!important;gap:6px!important}
@@ -210,11 +210,17 @@
                 </div>
             </div>
 
-            <!-- Results Area -->
-            <div class="search-results" id="search-results">
-                <div class="ts-empty-state" id="search-empty-state">
-                    <div class="ts-empty-icon" id="search-empty-icon">🏷️</div>
-                    <div class="ts-empty-text" id="search-empty-text">输入关键词开始搜索<br><small>14万 Danbooru 标签，支持中英双语搜索</small></div>
+            <!-- Results Area — 两个独立容器，切换时不销毁内容，保持各自滚动位置 -->
+            <div class="search-results" id="search-results-tag">
+                <div class="ts-empty-state" id="search-empty-state-tag">
+                    <div class="ts-empty-icon" id="search-empty-icon-tag">🏷️</div>
+                    <div class="ts-empty-text" id="search-empty-text-tag">输入关键词开始搜索<br><small>14万 Danbooru 标签，支持中英双语搜索</small></div>
+                </div>
+            </div>
+            <div class="search-results" id="search-results-character" style="display:none;">
+                <div class="ts-empty-state" id="search-empty-state-character">
+                    <div class="ts-empty-icon" id="search-empty-icon-character">👤</div>
+                    <div class="ts-empty-text" id="search-empty-text-character">输入角色名、系列或特征开始搜索<br><small>可组合筛选：任意字段均可留空</small></div>
                 </div>
             </div>
 
@@ -319,8 +325,8 @@ blush, smile, looking_at_viewer
     }
 </script>
 <script src="./js/jquery-3.7.1.min.js"></script>
-<script src="./js/main.js"></script>
-<script src="./js/unified-search.js"></script>
+<script src="./js/main.js?v=2"></script>
+<script src="./js/unified-search.js?v=2"></script>
 <script src="./js/combo-manager.js"></script>
 <script src="./js/autocomplete.js"></script>
 <script src="/sd-webui-prompt-all-in-one-js"></script>

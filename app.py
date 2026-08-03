@@ -108,6 +108,18 @@ def resolve_series_alias(q):
             matched.add(target)
     return list(matched)
 
+def _match_score(query_lower, en_tag, zh_trans, is_chinese):
+    """计算标签搜索相关性评分：精确匹配(3) > 前缀匹配(2) > 子串匹配(1)"""
+    if is_chinese:
+        target = zh_trans.lower()
+    else:
+        target = en_tag.lower().replace(' ', '_')
+    if target == query_lower:
+        return 3
+    if target.startswith(query_lower):
+        return 2
+    return 1
+
 def load_character_data():
     global CHARACTER_DATA, CHARACTER_NAMES, SERIES_INDEX, TAG_INDEX, ZH_TO_EN_TAG, CHARACTER_DATA_LOADED
     char_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'characters.txt')
@@ -251,7 +263,7 @@ if __name__ == "__main__":
     # ===== Tag Search API (legacy - called by tag-search.js) =====
     @app.get("/api/tag-search")
     async def tag_search(q: str = "", limit: int = 50):
-        """Search danbooru tags by English or Chinese text."""
+        """Search danbooru tags by English or Chinese text (relevance-sorted)."""
         if not TAG_DATA_LOADED:
             return JSONResponse({"error": "Tag data not loaded"}, status_code=500)
 
@@ -274,9 +286,14 @@ if __name__ == "__main__":
                     matched = True
 
             if matched:
-                results.append({"en": en, "zh": zh})
-                if len(results) >= limit:
-                    break
+                score = _match_score(q_lower, en, zh, is_chinese)
+                results.append({"en": en, "zh": zh, "_score": score})
+
+        # 按相关性排序，取前 limit 个
+        results.sort(key=lambda x: x["_score"], reverse=True)
+        results = results[:limit]
+        for r in results:
+            r.pop("_score", None)
 
         return {"results": results, "total": len(results), "query": q}
 
@@ -350,9 +367,10 @@ if __name__ == "__main__":
                 key = en
                 if key not in seen:
                     seen.add(key)
-                    results.append({"en": en, "zh": zh})
+                    score = _match_score(q_lower, en, zh, is_chinese)
+                    results.append({"en": en, "zh": zh, "_score": score})
 
-        # 别名解析：查询命中别名时，追加目标标签
+        # 别名解析：查询命中别名时，追加目标标签（score=0 排在最后）
         alias_matches = resolve_alias(q)
         for alias, target in alias_matches:
             if target not in seen:
@@ -362,10 +380,16 @@ if __name__ == "__main__":
                     if tag_en == target:
                         zh_trans = tag_zh
                         break
-                results.append({"en": target, "zh": zh_trans, "matched_via_alias": alias})
+                results.append({"en": target, "zh": zh_trans, "matched_via_alias": alias, "_score": 0})
+
+        # 按相关性排序：高分优先
+        results.sort(key=lambda x: x["_score"], reverse=True)
 
         total = len(results)
         paginated = results[offset:offset + per_page]
+        # 移除内部评分字段
+        for r in paginated:
+            r.pop("_score", None)
 
         return {
             "results": paginated,
@@ -638,39 +662,208 @@ if __name__ == "__main__":
     # ===== Autocomplete API =====
     @app.get("/api/autocomplete")
     async def tag_autocomplete(q: str = ""):
-        """Autocomplete for txt2img prompt. Returns top 100 most frequently used tags matching query."""
+        """Autocomplete for txt2img prompt. Returns top 100 most relevant tags matching query.
+        排序优先级：精确匹配 > 前缀匹配 > 子串匹配，同级别按使用频率降序。
+        """
         if not q or len(q.strip()) < 1:
             return {"results": [], "total": 0, "query": q}
-        
+
         if not TAG_DATA_LOADED:
             return {"results": [], "total": 0, "query": q, "error": "Tag data not loaded"}
-        
+
         q = q.strip().lower()
         is_chinese = bool(re.search(r'[\u4e00-\u9fff\u3400-\u4dbf]', q))
-        
+
         matches = []
         for en, zh in TAG_DATA:
             if is_chinese:
                 if q in zh.lower():
                     freq = TAG_FREQ.get(en.lower(), 0)
-                    matches.append((en, zh, freq))
+                    score = _match_score(q, en, zh, is_chinese)
+                    matches.append((en, zh, freq, score))
             else:
                 if q in en.lower():
                     freq = TAG_FREQ.get(en.lower(), 0)
-                    matches.append((en, zh, freq))
-        
-        # Sort by frequency descending, take top 100
-        matches.sort(key=lambda x: x[2], reverse=True)
+                    score = _match_score(q, en, zh, is_chinese)
+                    matches.append((en, zh, freq, score))
+
+        # 相关性优先，同级别按频率降序，取前100
+        matches.sort(key=lambda x: (x[3], x[2]), reverse=True)
         top = matches[:100]
-        
+
         return {
-            "results": [{"en": en, "zh": zh, "freq": freq} for en, zh, freq in top],
+            "results": [{"en": en, "zh": zh, "freq": freq} for en, zh, freq, _score in top],
             "total": len(matches),
             "query": q
         }
 
+    # ═══════════════════════════════════════════
+    # Character Image API — 从 Animadex 获取角色外观图片
+    # ═══════════════════════════════════════════
+
+    # 内存缓存：slug → {image_bytes, content_type}
+    CHARACTER_IMAGE_CACHE = {}
+
+    ANIMADEX_API_BASE = 'https://animadex.net/api'
+
+    # curl_cffi 浏览器指纹轮换池（绕过 Animadex Cloudflare 防护）
+    _animadex_impersonate_targets = ['chrome131', 'chrome124', 'chrome120', 'chrome110']
+    _animadex_impersonate_idx = 0
+
+    def _animadex_api_get(url: str, params: dict = None):
+        """调用 Animadex API（curl_cffi TLS 指纹模拟 + requests fallback）
+
+        策略:
+        1. 优先使用 curl_cffi + Chrome impersonation（绕过 Cloudflare）
+        2. curl_cffi 不可用时 fallback 到原生 requests
+        3. 网络错误返回 None（上层处理 503 重试逻辑）
+        """
+        global _animadex_impersonate_idx
+        import sys
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'}
+
+        # 策略1: curl_cffi（TLS 指纹伪装）
+        try:
+            from curl_cffi import requests as curl_req
+            target = _animadex_impersonate_targets[_animadex_impersonate_idx % len(_animadex_impersonate_targets)]
+            _animadex_impersonate_idx += 1
+            resp = curl_req.get(url, params=params or {}, headers=headers, timeout=15, impersonate=target)
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 403:
+                # 403 可能是指纹被识别，换下一个 impersonation target 再试一次
+                target2 = _animadex_impersonate_targets[_animadex_impersonate_idx % len(_animadex_impersonate_targets)]
+                _animadex_impersonate_idx += 1
+                resp2 = curl_req.get(url, params=params or {}, headers=headers, timeout=15, impersonate=target2)
+                if resp2.status_code == 200:
+                    return resp2.json()
+            print(f'[CharacterImage] curl_cffi returned status {resp.status_code}', file=sys.stderr)
+        except Exception as e:
+            print(f'[CharacterImage] curl_cffi error: {type(e).__name__}: {e}', file=sys.stderr)
+
+        # 策略2: fallback 到原生 requests
+        try:
+            import requests as http
+            resp = http.get(url, params=params or {}, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+            print(f'[CharacterImage] requests fallback returned status {resp.status_code}', file=sys.stderr)
+        except Exception as e:
+            print(f'[CharacterImage] requests fallback error: {type(e).__name__}: {e}', file=sys.stderr)
+
+        return None
+
+    def _download_image_bytes(img_url: str):
+        """下载图片字节，返回 (bytes, content_type) 或 None
+
+        优先使用 curl_cffi，失败则 fallback 到原生 requests。
+        """
+        import sys
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Referer': 'https://animadex.net/',
+            'Accept': 'image/webp,image/*,*/*',
+        }
+
+        # 策略1: curl_cffi
+        try:
+            from curl_cffi import requests as curl_req
+            resp = curl_req.get(img_url, headers=headers, timeout=15, impersonate='chrome131')
+            if resp.status_code == 200:
+                ct = 'image/webp' if '.webp' in img_url else 'image/png'
+                return (resp.content, ct)
+            print(f'[CharacterImage] curl_cffi img download returned {resp.status_code}', file=sys.stderr)
+        except Exception as e:
+            print(f'[CharacterImage] curl_cffi img error: {type(e).__name__}: {e}', file=sys.stderr)
+
+        # 策略2: fallback 原生 requests
+        try:
+            import requests as http
+            resp = http.get(img_url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                ct = 'image/webp' if '.webp' in img_url else 'image/png'
+                return (resp.content, ct)
+            print(f'[CharacterImage] requests img download returned {resp.status_code}', file=sys.stderr)
+        except Exception as e:
+            print(f'[CharacterImage] requests img error: {type(e).__name__}: {e}', file=sys.stderr)
+
+        return None
+
+    @app.get("/api/character-image")
+    def character_image(slug: str = ""):
+        """获取角色外观缩略图（从 Animadex 拉取并缓存）。
+
+        缓存策略：
+        - 成功获取图片 → 永久缓存（image_bytes）
+        - 角色不存在/无图片 → 永久缓存（definitive=True，确定性失败）
+        - API 不可用/下载失败 → 不缓存（临时性失败，下次请求重试）
+        """
+        if not slug:
+            raise HTTPException(status_code=400, detail="slug is required")
+
+        slug_lower = slug.lower().strip()
+
+        # 检查缓存
+        if slug_lower in CHARACTER_IMAGE_CACHE:
+            cached = CHARACTER_IMAGE_CACHE[slug_lower]
+            if cached['image_bytes']:
+                return Response(content=cached['image_bytes'],
+                              media_type=cached['content_type'],
+                              headers={'Cache-Control': 'public, max-age=86400'})
+            # 确定性失败（角色不存在或确实无图片）→ 直接返回 404
+            if cached.get('definitive', False):
+                raise HTTPException(status_code=404, detail="No image available")
+            # 非确定性失败缓存已过期，允许重试
+            del CHARACTER_IMAGE_CACHE[slug_lower]
+
+        # 1. 从 Animadex API 查找角色的图片 URL
+        search_result = _animadex_api_get(
+            f'{ANIMADEX_API_BASE}/characters/search',
+            {'q': slug_lower, 'sort': 'count', 'limit': 1, 'page': 1}
+        )
+
+        if not search_result:
+            # 临时性失败：API 暂时不可用，不缓存，下次请求重试
+            raise HTTPException(status_code=503, detail="Animadex API unavailable, will retry")
+
+        chars = search_result.get('results', [])
+        if not chars:
+            # 确定性失败：角色在 Animadex 上不存在
+            CHARACTER_IMAGE_CACHE[slug_lower] = {'image_bytes': None, 'content_type': '', 'definitive': True}
+            raise HTTPException(status_code=404, detail="Character not found on Animadex")
+
+        char = chars[0]
+        thumb_url = char.get('thumb_url', '')
+        img_url = char.get('img_url', '')
+        has_image = char.get('has_image', False)
+
+        if not has_image or (not thumb_url and not img_url):
+            # 确定性失败：角色存在但 Animadex 无图片
+            CHARACTER_IMAGE_CACHE[slug_lower] = {'image_bytes': None, 'content_type': '', 'definitive': True}
+            raise HTTPException(status_code=404, detail="No image for this character")
+
+        # 2. 下载图片（优先缩略图）
+        url = thumb_url or img_url
+        img_result = _download_image_bytes(url)
+
+        if not img_result:
+            # 临时性失败：下载可能因网络波动失败，不缓存
+            raise HTTPException(status_code=504, detail="Failed to download image, will retry")
+
+        image_bytes, content_type = img_result
+
+        # 3. 缓存并返回（成功时永久缓存）
+        CHARACTER_IMAGE_CACHE[slug_lower] = {
+            'image_bytes': image_bytes,
+            'content_type': content_type,
+            'definitive': True,
+        }
+
+        return Response(content=image_bytes, media_type=content_type,
+                       headers={'Cache-Control': 'public, max-age=86400'})
+
     # =====
-    
+
     app_started_callback(Optional[Blocks], app)
     app.mount("/", StaticFiles(directory="./static", html=True), name="static")
 

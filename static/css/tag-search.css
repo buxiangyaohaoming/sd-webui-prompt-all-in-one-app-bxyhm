@@ -423,6 +423,24 @@ body.dark {
     }
 }
 
+/* ===== 顶部标签切换栏：粘性跟随滚动 ===== */
+/* 下滑缓慢隐藏，上滑立即出现 */
+#tab-headers {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    /* 默认无 transition → 出现时立即显示 */
+    transition: none;
+    background: transparent;
+}
+#tab-headers.tab-headers-hidden {
+    opacity: 0;
+    transform: translateY(-100%);
+    /* 隐藏时带 transition → 缓慢消失 */
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events: none;
+}
+
 /* ===== Character Card ===== */
 .cs-character-list {
     display: flex;
@@ -435,9 +453,39 @@ body.dark {
     border-radius: 10px;
     padding: 14px 16px;
     transition: border-color 0.15s;
+    display: flex;
+    flex-direction: row;
+    gap: 14px;
+    align-items: flex-start;
 }
 .cs-character-card:hover {
     border-color: var(--ts-accent);
+}
+/* 角色图片区域 */
+.cs-character-image-wrap {
+    flex-shrink: 0;
+    width: 120px;
+    height: 160px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--ts-bg);
+    border: 1px solid var(--ts-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cs-character-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.cs-image-error {
+    display: none;
+}
+.cs-character-body {
+    flex: 1;
+    min-width: 0;
 }
 .cs-character-header {
     margin-bottom: 10px;
